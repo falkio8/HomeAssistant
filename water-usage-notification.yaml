@@ -35,6 +35,8 @@ blueprint:
 
     - Ein `input_number` Helper zum Speichern des Startwertes (gleiche Einheit wie der Sensor)
 
+    - Ein `input_number` Helper für die einstellbare Schwellmenge
+
 
     Pflichtfelder sind mit * markiert.
   domain: automation
@@ -78,19 +80,19 @@ blueprint:
             entity:
               filter:
                 domain: input_number
-        threshold:
-          name: Schwellmenge *
+        threshold_helper:
+          name: Schwellmenge Helper (input_number) *
           description: >
-            Die Wassermenge, nach deren Verbrauch die Benachrichtigung gesendet wird.
-            **Einheit muss zum Sensor passen** (typischerweise m³ – bei 0.5 m³ also 500 Liter).
-          default: 0.5
+            Ein `input_number` Helper, der die Schwellmenge festlegt, nach der die Benachrichtigung
+            gesendet wird. So kannst du die Menge vor jedem Start individuell anpassen, ohne
+            das Blueprint zu bearbeiten.
+            **Einheit muss zum Sensor passen** (typischerweise m³ – bei Wert 0.5 also 500 Liter).
+            Empfohlene Helper-Konfiguration: min: 0.001, max: 1000, step: 0.001, Einheit: m³.
+          default: []
           selector:
-            number:
-              min: 0.001
-              max: 1000
-              step: 0.001
-              mode: box
-              unit_of_measurement: m³
+            entity:
+              filter:
+                domain: input_number
     notify_settings:
       name: "Benachrichtigung"
       icon: mdi:bell-ring-outline
@@ -127,10 +129,7 @@ blueprint:
             - `{schwelle}` – konfigurierte Schwellmenge (m³)
 
             - `{zaehler}` – aktueller Zählerstand
-          default: >-
-            🌿 Bewässerung fertig!
-            Verbrauch: {verbrauch} m³ ({verbrauch_l} L) – Schwelle: {schwelle} m³.
-            Laufzeit: {dauer}.
+          default: "🌿 Bewässerung fertig!{{'\n'}}Verbrauch: {verbrauch} m³ ({verbrauch_l} L){{'\n'}}Schwelle: {schwelle} m³{{'\n'}}Laufzeit: {dauer}"
           selector:
             text:
               multiline: true
@@ -238,7 +237,8 @@ max_exceeded: silent
 variables:
   water_sensor: !input water_sensor
   start_value_helper: !input start_value_helper
-  threshold: !input threshold
+  threshold_helper: !input threshold_helper
+  threshold: "{{ states(threshold_helper) | float(0) }}"
   notify_devices: !input notify_devices
   notify_title: !input notify_title
   notify_message_template: !input notify_message
