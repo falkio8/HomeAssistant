@@ -1,0 +1,349 @@
+blueprint:
+  name: Wasserverbrauch Benachrichtigung (Rasensprenger)
+  description: >
+    # 💧 Wasserverbrauch Benachrichtigung
+
+
+    Diese Automatisierung benachrichtigt dich, sobald nach dem Drücken eines Input-Buttons
+    eine vorher definierte Menge an Wasser über einen Wasserzähler-Sensor verbraucht wurde.
+
+
+    **Typischer Anwendungsfall:** Rasensprenger / Gartenbewässerung – du startest die Bewässerung,
+    drückst den Input-Button und bekommst eine Push-Benachrichtigung auf dein Handy,
+    wenn die gewünschte Wassermenge durchgelaufen ist. Die Nachricht enthält die tatsächlich
+    verbrauchte Menge sowie die Laufzeit.
+
+
+    <details>
+    <summary><b>Ablauf:</b> 👈</summary>
+
+      - **Start:** Beim Drücken des Input-Buttons merkt sich die Automatisierung den aktuellen
+        Zählerstand (im `input_number` Helper) und die Startzeit (intern als Variable).
+      - **Warten:** Die Automatisierung wartet, bis die Differenz `aktueller Zählerstand − Startwert`
+        die Schwellmenge erreicht.
+      - **Benachrichtigung:** Push-Benachrichtigung mit verbrauchter Menge und Laufzeit
+        an die ausgewählten Geräte.
+      - **Reset:** Startwert wird zurückgesetzt. Erneuter Druck startet einen neuen Durchlauf.
+    </details>
+
+
+    **Voraussetzungen:**
+
+    - Ein `input_button` zum Starten der Überwachung
+
+    - Ein `sensor` mit dem Gesamtzählerstand (z. B. `sensor.gartenenwasserzahler_total`)
+
+    - Ein `input_number` Helper zum Speichern des Startwertes (gleiche Einheit wie der Sensor)
+
+
+    Pflichtfelder sind mit * markiert.
+  domain: automation
+  input:
+    water_settings:
+      name: "Wasser-Einstellungen *"
+      icon: mdi:water
+      collapsed: false
+      input:
+        water_sensor:
+          name: Wasserzähler Sensor *
+          description: >
+            Der Sensor, der den Gesamtzählerstand des Wasserverbrauchs liefert
+            (z. B. `sensor.gartenenwasserzahler_total`).
+            Wichtig: Der Sensor muss einen monoton steigenden Zählerstand liefern (kein Momentanwert).
+          default: sensor.gartenenwasserzahler_total
+          selector:
+            entity:
+              filter:
+                domain: sensor
+        start_button:
+          name: Start Input-Button *
+          description: >
+            Der `input_button`, mit dem du die Überwachung startest.
+            Beim Drücken wird der aktuelle Zählerstand als Startwert gespeichert
+            und die Laufzeitmessung beginnt.
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: input_button
+        start_value_helper:
+          name: Startwert-Helper (input_number) *
+          description: >
+            Ein `input_number` Helper, in dem der Zählerstand beim Drücken des Buttons gespeichert wird.
+            Erstelle einen Helper mit gleicher Einheit wie dein Wasserzähler (z. B. m³),
+            min: 0, max: z. B. 100000, step: passend zur Sensorauflösung (z. B. 0.001).
+            Wert 0 bedeutet "Überwachung inaktiv".
+          default: []
+          selector:
+            entity:
+              filter:
+                domain: input_number
+        threshold:
+          name: Schwellmenge *
+          description: >
+            Die Wassermenge, nach deren Verbrauch die Benachrichtigung gesendet wird.
+            **Einheit muss zum Sensor passen** (typischerweise m³ – bei 0.5 m³ also 500 Liter).
+          default: 0.5
+          selector:
+            number:
+              min: 0.001
+              max: 1000
+              step: 0.001
+              mode: box
+              unit_of_measurement: m³
+    notify_settings:
+      name: "Benachrichtigung"
+      icon: mdi:bell-ring-outline
+      collapsed: false
+      input:
+        notify_devices:
+          name: Geräte für Benachrichtigung *
+          description: >
+            Wähle ein oder mehrere mobile Geräte (Home Assistant Companion App),
+            an die die Benachrichtigung gesendet werden soll.
+          default: []
+          selector:
+            device:
+              filter:
+                - integration: mobile_app
+              multiple: true
+        notify_title:
+          name: Titel
+          description: Titel der Push-Benachrichtigung.
+          default: 💧 Gartenwasser
+          selector:
+            text:
+        notify_message:
+          name: Nachricht
+          description: >
+            Nachrichtentext. Folgende Platzhalter werden automatisch ersetzt:
+
+            - `{verbrauch}` – tatsächlich verbrauchte Wassermenge (m³)
+
+            - `{verbrauch_l}` – tatsächlich verbrauchte Wassermenge (Liter)
+
+            - `{dauer}` – Dauer der Bewässerung (h:mm:ss)
+
+            - `{schwelle}` – konfigurierte Schwellmenge (m³)
+
+            - `{zaehler}` – aktueller Zählerstand
+          default: >-
+            🌿 Bewässerung fertig!
+            Verbrauch: {verbrauch} m³ ({verbrauch_l} L) – Schwelle: {schwelle} m³.
+            Laufzeit: {dauer}.
+          selector:
+            text:
+              multiline: true
+        notify_tag:
+          name: Notification Tag
+          description: >
+            Tag, um Benachrichtigungen zu gruppieren / zu ersetzen.
+            Leer lassen, um keinen Tag zu verwenden.
+          default: garden-water
+          selector:
+            text:
+        notify_url:
+          name: Notification URL
+          description: >
+            Pfad, der beim Tippen auf die Benachrichtigung in HA geöffnet wird,
+            z. B. `/lovelace/0#garden`. Leer lassen für Standardverhalten.
+          default: "/lovelace/0#garden"
+          selector:
+            text:
+        notify_interruption_level:
+          name: Interruption Level (iOS)
+          description: >
+            iOS 15+ Interruption Level. Für eine zuverlässige Zustellung bei Bewässerung
+            wird "Time Sensitive" empfohlen.
+          default: time-sensitive
+          selector:
+            select:
+              mode: dropdown
+              options:
+                - label: Standard
+                  value: "active"
+                - label: Critical
+                  value: "critical"
+                - label: Time Sensitive
+                  value: "time-sensitive"
+                - label: Passiv (ohne Bildschirm wecken)
+                  value: "passive"
+        notify_sound:
+          name: Notification Sound (iOS)
+          description: >
+            Dateiname eines Sounds in der HA Companion App (mit Endung).
+            Leer lassen für Standardton.
+          default: []
+          selector:
+            text:
+        notify_android_options:
+          name: Android Optionen
+          description: >
+            **High Priority** – sofortige Zustellung.
+            **Sticky** – Notification bleibt, bis aktiv weggewischt.
+            **Channel** – eigenen Notification-Channel verwenden.
+            **Icon** – eigenes Icon verwenden.
+          default:
+            - "high_priority"
+            - "icon"
+          selector:
+            select:
+              multiple: true
+              options:
+                - label: High Priority
+                  value: "high_priority"
+                - label: Sticky Notification
+                  value: "sticky"
+                - label: Notification Channel
+                  value: "channel"
+                - label: Icon
+                  value: "icon"
+        notify_channel:
+          name: Notification Channel (Android)
+          description: Name des Notification-Channels (nur wenn oben "Channel" aktiviert ist).
+          default: Garden Water
+          selector:
+            text:
+        notify_icon:
+          name: Icon (Android)
+          description: Icon, nur wenn oben "Icon" aktiviert ist.
+          default: "mdi:sprinkler-variant"
+          selector:
+            icon:
+        notify_icon_colour:
+          name: Icon Farbe (Android)
+          description: Farbe für das Notification-Icon (nur wenn "Icon" aktiviert).
+          default: [41, 121, 255]
+          selector:
+            color_rgb:
+    advanced_settings:
+      name: "Erweitert"
+      icon: mdi:cog-outline
+      collapsed: true
+      input:
+        custom_actions:
+          name: Custom Actions
+          description: >
+            Optionale zusätzliche Aktionen, die ausgeführt werden, wenn die Schwellmenge erreicht ist
+            (z. B. Bewässerungsventil schließen, TTS, Szene aktivieren).
+          default: []
+          selector:
+            action:
+
+mode: restart
+max_exceeded: silent
+
+# Variablen werden beim Triggern der Automatisierung einmal ausgewertet
+# und bleiben für den gesamten Lauf (inkl. wait_for_trigger) gültig.
+variables:
+  water_sensor: !input water_sensor
+  start_value_helper: !input start_value_helper
+  threshold: !input threshold
+  notify_devices: !input notify_devices
+  notify_title: !input notify_title
+  notify_message_template: !input notify_message
+  notify_tag: !input notify_tag
+  notify_url: !input notify_url
+  notify_interruption_level: !input notify_interruption_level
+  notify_sound: !input notify_sound
+  notify_android_options: !input notify_android_options
+  notify_channel: !input notify_channel
+  notify_icon: !input notify_icon
+  notify_icon_colour: !input notify_icon_colour
+  # Startzeit als Variable - kein input_datetime Helper nötig
+  start_time: "{{ now().timestamp() }}"
+
+trigger:
+  - platform: state
+    entity_id: !input start_button
+
+action:
+  # Startzählerstand merken
+  - service: input_number.set_value
+    target:
+      entity_id: !input start_value_helper
+    data:
+      value: "{{ states(water_sensor) | float(0) }}"
+
+  - service: persistent_notification.create
+    data:
+      title: "💧 Wasserüberwachung gestartet"
+      message: >-
+        Startzählerstand: {{ states(water_sensor) }}.
+        Benachrichtigung bei +{{ threshold }} m³.
+      notification_id: "water_usage_started"
+
+  # Warten bis die Schwellmenge erreicht ist (ein einziger Automatisierungs-Lauf!)
+  - wait_for_trigger:
+      - platform: template
+        value_template: >-
+          {% set start = states(start_value_helper) | float(0) %}
+          {% set current = states(water_sensor) | float(0) %}
+          {{ (current - start) >= (threshold | float(0)) }}
+
+  # Werte für Nachricht berechnen
+  - variables:
+      current_value: "{{ states(water_sensor) | float(0) }}"
+      start_value: "{{ states(start_value_helper) | float(0) }}"
+      consumed: "{{ (current_value - start_value) | round(3) }}"
+      consumed_liters: "{{ ((current_value - start_value) * 1000) | round(0) | int }}"
+      duration_seconds: "{{ (now().timestamp() - start_time) | int(0) }}"
+      duration_str: >-
+        {% set s = duration_seconds %}
+        {% set h = (s // 3600) %}
+        {% set m = ((s % 3600) // 60) %}
+        {% set sec = (s % 60) %}
+        {{ '%d:%02d:%02d' % (h, m, sec) }}
+      notify_message: >-
+        {{ notify_message_template
+           | replace('{verbrauch_l}', consumed_liters | string)
+           | replace('{verbrauch}', consumed | string)
+           | replace('{dauer}', duration_str)
+           | replace('{schwelle}', threshold | string)
+           | replace('{zaehler}', states(water_sensor)) }}
+
+  # Push-Benachrichtigung an alle ausgewählten Geräte
+  - repeat:
+      for_each: "{{ notify_devices }}"
+      sequence:
+        - service: >-
+            {{ 'notify.mobile_app_' ~ (device_attr(repeat.item, 'name') | slugify) }}
+          data:
+            title: "{{ notify_title }}"
+            message: "{{ notify_message }}"
+            data:
+              tag: "{{ notify_tag if notify_tag else none }}"
+              url: "{{ notify_url if notify_url else none }}"
+              clickAction: "{{ notify_url if notify_url else none }}"
+              # iOS
+              push:
+                interruption-level: "{{ notify_interruption_level }}"
+              sound: "{{ notify_sound if notify_sound else none }}"
+              # Android
+              priority: >-
+                {{ 'high' if 'high_priority' in notify_android_options else 'normal' }}
+              ttl: >-
+                {{ 0 if 'high_priority' in notify_android_options else 3600 }}
+              sticky: >-
+                {{ 'true' if 'sticky' in notify_android_options else 'false' }}
+              channel: >-
+                {{ notify_channel if 'channel' in notify_android_options and notify_channel else none }}
+              notification_icon: >-
+                {{ notify_icon if 'icon' in notify_android_options else none }}
+              color: >-
+                {% if 'icon' in notify_android_options and notify_icon_colour %}
+                rgb({{ notify_icon_colour[0] }}, {{ notify_icon_colour[1] }}, {{ notify_icon_colour[2] }})
+                {% else %}
+                {{ none }}
+                {% endif %}
+
+  # Startwert zurücksetzen ("Überwachung inaktiv")
+  - service: input_number.set_value
+    target:
+      entity_id: !input start_value_helper
+    data:
+      value: 0
+
+  # Optionale Custom Actions (z. B. Ventil zu, TTS)
+  - choose: []
+    default: !input custom_actions
